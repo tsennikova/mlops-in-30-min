@@ -1,6 +1,6 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # DAIS 2021 Data Science session: Setup
+# MAGIC # Data Science session: Setup
 # MAGIC 
 # MAGIC This notebook contains setup code that would have been run outside of the core data science flow. These are details that aren't part of the data science demo. It's not necessarily meant to be Run All directly; these are pieces to execute as needed, for reference.
 
@@ -14,7 +14,7 @@
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC DROP TABLE seanowen.demographic;
+# MAGIC DROP TABLE IF EXISTS tania.demographic;
 
 # COMMAND ----------
 
@@ -39,7 +39,7 @@ telco_df = telco_df.withColumn("TotalCharges",\
     F.when(F.length(F.trim(F.col("TotalCharges"))) == 0, None).\
     otherwise(F.col("TotalCharges").cast('double')))
 
-telco_df.select("customerID", "gender", "SeniorCitizen", "Partner", "Dependents", "Churn").write.format("delta").saveAsTable("seanowen.demographic")
+telco_df.select("customerID", "gender", "SeniorCitizen", "Partner", "Dependents", "Churn").write.format("delta").saveAsTable("tania.demographic")
 
 # COMMAND ----------
 
@@ -76,7 +76,7 @@ service_df = compute_service_features(telco_df)
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC DROP TABLE seanowen.service_features;
+# MAGIC DROP TABLE IF EXISTS tania.service_features;
 
 # COMMAND ----------
 
@@ -85,14 +85,14 @@ from databricks.feature_store import FeatureStoreClient
 fs = FeatureStoreClient()
 
 service_features_table = fs.create_feature_table(
-  name='seanowen.service_features',
+  name='tania.service_features',
   keys='customerID',
   schema=service_df.schema,
   description='Telco customer services')
 
 # COMMAND ----------
 
-compute_service_features.compute_and_write(telco_df, feature_table_name="seanowen.service_features")
+compute_service_features.compute_and_write(telco_df, feature_table_name="tania.service_features")
 
 # COMMAND ----------
 
@@ -124,12 +124,12 @@ def mlflow_call_endpoint(endpoint, method, body):
 # COMMAND ----------
 
 trigger_job = json.dumps({
-  "model_name": "dais-2021-churn",
+  "model_name": "tania-telco-churn",
   "events": ["MODEL_VERSION_TRANSITIONED_STAGE"],
   "description": "Trigger the CI/CD job when a model is moved to Staging",
   "status": "ACTIVE",
   "job_spec": {
-    "job_id": "1415341",
+    "job_id": "186725",
     "workspace_url": host_creds.host,
     "access_token": host_creds.token
   }
@@ -144,7 +144,7 @@ mlflow_call_endpoint("registry-webhooks/create", "POST", trigger_job)
 
 # COMMAND ----------
 
-mlflow_call_endpoint("registry-webhooks/list", method="GET", body=json.dumps({"model_name": "dais-2021-churn"}))
+mlflow_call_endpoint("registry-webhooks/list", method="GET", body=json.dumps({"model_name": "tania-telco-churn"}))
 
 # COMMAND ----------
 
@@ -153,7 +153,7 @@ mlflow_call_endpoint("registry-webhooks/list", method="GET", body=json.dumps({"m
 
 # COMMAND ----------
 
-mlflow_call_endpoint("registry-webhooks/delete", method="DELETE", body=json.dumps({'id': '26ac11a4b57a418fbf00eb6a8fb1c5b1'}))
+#mlflow_call_endpoint("registry-webhooks/delete", method="DELETE", body=json.dumps({'id': '26ac11a4b57a418fbf00eb6a8fb1c5b1'}))
 
 # COMMAND ----------
 

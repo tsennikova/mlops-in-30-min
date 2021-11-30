@@ -1,6 +1,6 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # DAIS 2021 Data Science session: Modeling
+# MAGIC # Data Science session: Modeling
 # MAGIC 
 # MAGIC Auto ML generated a baseline model for us, but, we could already see it was too simplistic. From that working modeling code, the data scientist could iterate and improve it by hand.
 # MAGIC 
@@ -16,8 +16,8 @@ from databricks.feature_store import FeatureStoreClient, FeatureLookup
 
 fs = FeatureStoreClient()
 
-training_set = fs.create_training_set(spark.read.table("seanowen.demographic"), 
-                                      [FeatureLookup(table_name = "seanowen.service_features", lookup_key="customerID")], 
+training_set = fs.create_training_set(spark.read.table("tania.demographic"), 
+                                      [FeatureLookup(table_name = "tania.service_features", lookup_key="customerID")], 
                                       label="Churn", exclude_columns="customerID")
 df_loaded = training_set.load_df().toPandas()
 
@@ -128,8 +128,8 @@ from mlflow.models.signature import infer_signature
 mlflow.autolog(log_input_examples=True)
 
 with mlflow.start_run() as run:
-  training_set = fs.create_training_set(spark.read.table("seanowen.demographic"), 
-                                      [FeatureLookup(table_name = "seanowen.service_features", lookup_key="customerID")], 
+  training_set = fs.create_training_set(spark.read.table("tania.demographic"), 
+                                      [FeatureLookup(table_name = "tania.service_features", lookup_key="customerID")], 
                                       label="Churn", exclude_columns="customerID")
   df_loaded = training_set.load_df().toPandas()
   split_X = df_loaded.drop([target_col], axis=1)
@@ -143,7 +143,7 @@ with mlflow.start_run() as run:
     "model",
     flavor=mlflow.sklearn,
     training_set=training_set,
-    registered_model_name="dais-2021-churn",
+    registered_model_name="tania-telco-churn",
     input_example=split_X[:100],
     signature=infer_signature(split_X, split_y))
   
@@ -152,7 +152,7 @@ with mlflow.start_run() as run:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC The process above created a new version of the registered model `dais-2021-churn`. Transition it to Staging.
+# MAGIC The process above created a new version of the registered model `tania-telco-churn`. Transition it to Staging.
 
 # COMMAND ----------
 
@@ -160,8 +160,8 @@ import mlflow.tracking
 
 client = mlflow.tracking.MlflowClient()
 
-model_version = client.get_latest_versions("dais-2021-churn", stages=["None"])[0]
-client.transition_model_version_stage("dais-2021-churn", model_version.version, stage="Staging")
+model_version = client.get_latest_versions("tania-telco-churn", stages=["None"])[0]
+client.transition_model_version_stage("tania-telco-churn", model_version.version, stage="Staging")
 
 # COMMAND ----------
 
