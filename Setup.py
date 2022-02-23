@@ -1,8 +1,13 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # DAIS 2021 Data Science session: Setup
+# MAGIC # Data Science session: Setup
 # MAGIC 
 # MAGIC This notebook contains setup code that would have been run outside of the core data science flow. These are details that aren't part of the data science demo. It's not necessarily meant to be Run All directly; these are pieces to execute as needed, for reference.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC <h3>Start MySQL Server here: https://portal.azure.com/#@DataBricksInc.onmicrosoft.com/resource/subscriptions/3f2e4d32-8e8d-46d6-82bc-5bb8d962328b/resourceGroups/oneenv/providers/Microsoft.DBforMySQL/servers/demo-feature-store/overview</h3>
 
 # COMMAND ----------
 
@@ -14,19 +19,19 @@
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC DROP TABLE seanowen.demographic;
+# MAGIC DROP TABLE IF EXISTS tania.demographic
 
 # COMMAND ----------
 
 import pyspark.sql.functions as F
 
-telco_df = spark.read.option("header", True).option("inferSchema", True).csv("/mnt/databricks-datasets-private/ML/telco_churn/Telco-Customer-Churn.csv")
+telco_df = spark.read.option("header", True).option("inferSchema", True).csv("dbfs:/FileStore/tania/Telco_Customer_Churn.csv")
 
 # 0/1 -> boolean
 telco_df = telco_df.withColumn("SeniorCitizen", F.col("SeniorCitizen") == 1)
 # Yes/No -> boolean
 for yes_no_col in ["Partner", "Dependents", "PhoneService", "PaperlessBilling"]:
-  telco_df = telco_df.withColumn(yes_no_col, F.col(yes_no_col) == "Yes")
+  telco_df = telco_df.withColumn(yes_no_col,  F.when(F.col(yes_no_col) == "Yes", 1).otherwise(0))
 telco_df = telco_df.withColumn("Churn", F.when(F.col("Churn") == "Yes", 1).otherwise(0))
 
 # Contract categorical -> duration in months
@@ -39,11 +44,7 @@ telco_df = telco_df.withColumn("TotalCharges",\
     F.when(F.length(F.trim(F.col("TotalCharges"))) == 0, None).\
     otherwise(F.col("TotalCharges").cast('double')))
 
-telco_df.select("customerID", "gender", "SeniorCitizen", "Partner", "Dependents", "Churn").write.format("delta").saveAsTable("seanowen.demographic")
-
-# COMMAND ----------
-
-
+telco_df.select("customerID", "gender", "SeniorCitizen", "Partner", "Dependents", "Churn").write.format("delta").saveAsTable("tania.demographic")
 
 # COMMAND ----------
 
@@ -76,7 +77,7 @@ service_df = compute_service_features(telco_df)
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC DROP TABLE seanowen.service_features;
+# MAGIC DROP TABLE IF EXISTS tania.service_features;
 
 # COMMAND ----------
 
@@ -85,14 +86,42 @@ from databricks.feature_store import FeatureStoreClient
 fs = FeatureStoreClient()
 
 service_features_table = fs.create_feature_table(
-  name='seanowen.service_features',
+  name='tania.service_features',
   keys='customerID',
   schema=service_df.schema,
   description='Telco customer services')
 
 # COMMAND ----------
 
-compute_service_features.compute_and_write(telco_df, feature_table_name="seanowen.service_features")
+compute_service_features.compute_and_write(telco_df, feature_table_name="tania.service_features")
+
+# COMMAND ----------
+
+import datetime
+from databricks.feature_store.online_store_spec import AzureMySqlSpec
+
+hostname = "demo-feature-store.mysql.database.azure.com" # dbutils.secrets.get("oetrta", "mysql-hostname")
+port = 3306 # int(dbutils.secrets.get("oetrta", "mysql-port"))
+
+
+online_store = AzureMySqlSpec(
+  hostname=hostname,
+  port=port,
+  read_secret_prefix='demo/ROFS',
+  write_secret_prefix='demo/FAFS'
+)
+
+# COMMAND ----------
+
+fs.publish_table(
+  name='tania.service_features',
+  online_store=online_store,
+  mode='overwrite'
+)
+
+# COMMAND ----------
+
+
 
 # COMMAND ----------
 
@@ -124,12 +153,12 @@ def mlflow_call_endpoint(endpoint, method, body):
 # COMMAND ----------
 
 trigger_job = json.dumps({
-  "model_name": "dais-2021-churn",
+  "model_name": "telco-churn",
   "events": ["MODEL_VERSION_TRANSITIONED_STAGE"],
   "description": "Trigger the CI/CD job when a model is moved to Staging",
   "status": "ACTIVE",
   "job_spec": {
-    "job_id": "1415341",
+    "job_id": "92323",
     "workspace_url": host_creds.host,
     "access_token": host_creds.token
   }
@@ -144,7 +173,7 @@ mlflow_call_endpoint("registry-webhooks/create", "POST", trigger_job)
 
 # COMMAND ----------
 
-mlflow_call_endpoint("registry-webhooks/list", method="GET", body=json.dumps({"model_name": "dais-2021-churn"}))
+mlflow_call_endpoint("registry-webhooks/list", method="GET", body=json.dumps({"model_name": "telco-churn"}))
 
 # COMMAND ----------
 
@@ -153,7 +182,8 @@ mlflow_call_endpoint("registry-webhooks/list", method="GET", body=json.dumps({"m
 
 # COMMAND ----------
 
-mlflow_call_endpoint("registry-webhooks/delete", method="DELETE", body=json.dumps({'id': '26ac11a4b57a418fbf00eb6a8fb1c5b1'}))
+#uncomment when needed
+#mlflow_call_endpoint("registry-webhooks/delete", method="DELETE", body=json.dumps({'id': '73673c8c6e4047fb8331e65e170f1267'}))
 
 # COMMAND ----------
 

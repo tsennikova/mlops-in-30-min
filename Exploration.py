@@ -1,6 +1,6 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # DAIS 2021 Data Science session: Exploration
+# MAGIC # Data Science session: Exploration
 # MAGIC 
 # MAGIC Welcome to Databricks! This session will illustrate a fictional, simple, but representative day in the life of a data scientist on Databricks, who starts with data and ends up with a basic production service.
 # MAGIC 
@@ -14,7 +14,7 @@
 
 # COMMAND ----------
 
-display(spark.read.table("seanowen.demographic"))
+display(spark.read.table("tania.demographic"))
 
 # COMMAND ----------
 
@@ -23,11 +23,11 @@ display(spark.read.table("seanowen.demographic"))
 
 # COMMAND ----------
 
-display(spark.read.table("seanowen.demographic").summary())
+display(spark.read.table("tania.demographic").summary())
 
 # COMMAND ----------
 
-display(spark.read.table("seanowen.demographic"))
+display(spark.read.table("tania.demographic"))
 
 # COMMAND ----------
 
@@ -56,8 +56,8 @@ from databricks.feature_store import FeatureStoreClient, FeatureLookup
 
 fs = FeatureStoreClient()
 
-training_set = fs.create_training_set(spark.read.table("seanowen.demographic"), 
-                                      [FeatureLookup(table_name = "seanowen.service_features", lookup_key="customerID")], 
+training_set = fs.create_training_set(spark.read.table("tania.demographic"), 
+                                      [FeatureLookup(table_name = "tania.service_features", lookup_key="customerID")], 
                                       label=None, exclude_columns="customerID")
 
 display(training_set.load_df())
@@ -70,11 +70,11 @@ display(training_set.load_df())
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC DROP TABLE seanowen.demographic_service
+# MAGIC DROP TABLE tania.demographic_service
 
 # COMMAND ----------
 
-training_set.load_df().write.format("delta").saveAsTable("seanowen.demographic_service")
+training_set.load_df().write.format("delta").saveAsTable("tania.demographic_service")
 
 # COMMAND ----------
 
@@ -101,12 +101,12 @@ import pandas as pd
 
 mlflow.autolog(disable=True)
 
-sample = spark.read.table("seanowen.demographic_service").sample(0.05).toPandas()
+sample = spark.read.table("tania.demographic_service").sample(0.05).toPandas()
 data = sample.drop(["Churn"], axis=1)
 labels = sample["Churn"]
 X_background, X_example, _, y_example = train_test_split(data, labels, train_size=0.5, random_state=42, stratify=labels)
 
-model = mlflow.sklearn.load_model("runs:/b53bf168667a46aaadb6a06aab0bc0ac/model")
+model = mlflow.sklearn.load_model("runs:/d7c10619d67d4785a6cdc2f7678a278d/model")
 
 predict = lambda x: model.predict_proba(pd.DataFrame(x, columns=X_example.columns))[:,-1]
 explainer = KernelExplainer(predict, X_example)
@@ -144,6 +144,20 @@ sns.scatterplot(x=embedded[:,0], y=embedded[:,1], \
                 style=X_example['Contract'], \
                 hue=X_example['tenure'], \
                 size=(y_example == 1), size_order=[True, False], sizes=(100,200))
+
+# COMMAND ----------
+
+# DBTITLE 1,Test Example for Serving
+# MAGIC %md
+# MAGIC [
+# MAGIC   {
+# MAGIC     "customerID": "7590-VHVEG",
+# MAGIC     "gender": "Female",
+# MAGIC     "SeniorCitizen": false,
+# MAGIC     "Partner":  1,
+# MAGIC     "Dependents": 0
+# MAGIC   }
+# MAGIC ]
 
 # COMMAND ----------
 

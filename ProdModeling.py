@@ -1,6 +1,6 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # DAIS 2021 Data Science session: Modeling
+# MAGIC #Data Science session: Modeling
 # MAGIC 
 # MAGIC Auto ML generated a baseline model for us, but, we could already see it was too simplistic. From that working modeling code, the data scientist could iterate and improve it by hand.
 # MAGIC 
@@ -16,10 +16,19 @@ from databricks.feature_store import FeatureStoreClient, FeatureLookup
 
 fs = FeatureStoreClient()
 
-training_set = fs.create_training_set(spark.read.table("seanowen.demographic"), 
-                                      [FeatureLookup(table_name = "seanowen.service_features", lookup_key="customerID")], 
+training_set = fs.create_training_set(spark.read.table("tania.demographic"), 
+                                      [FeatureLookup(table_name = "tania.service_features", lookup_key="customerID")], 
                                       label="Churn", exclude_columns="customerID")
 df_loaded = training_set.load_df().toPandas()
+
+# COMMAND ----------
+
+df_loaded["Partner"] = df_loaded["Partner"].astype(np.int64)
+df_loaded["Dependents"] = df_loaded["Dependents"].astype(np.int64)
+
+# COMMAND ----------
+
+df_loaded.dtypes
 
 # COMMAND ----------
 
@@ -112,7 +121,7 @@ search_space = {
 }
 
 best_params = fmin(fn=train_model, space=search_space, algo=tpe.suggest, \
-                   max_evals=64, trials=SparkTrials(parallelism=8), \
+                   max_evals=16, trials=SparkTrials(parallelism=8), \
                    rstate=np.random.RandomState(810302555))
 
 # COMMAND ----------
@@ -128,10 +137,14 @@ from mlflow.models.signature import infer_signature
 mlflow.autolog(log_input_examples=True)
 
 with mlflow.start_run() as run:
-  training_set = fs.create_training_set(spark.read.table("seanowen.demographic"), 
-                                      [FeatureLookup(table_name = "seanowen.service_features", lookup_key="customerID")], 
+  training_set = fs.create_training_set(spark.read.table("tania.demographic"), 
+                                      [FeatureLookup(table_name = "tania.service_features", lookup_key="customerID")], 
                                       label="Churn", exclude_columns="customerID")
+  
   df_loaded = training_set.load_df().toPandas()
+  df_loaded["Partner"] = df_loaded["Partner"].astype(np.int64)
+  df_loaded["Dependents"] = df_loaded["Dependents"].astype(np.int64)
+  
   split_X = df_loaded.drop([target_col], axis=1)
   split_y = df_loaded[target_col]
 
@@ -143,16 +156,16 @@ with mlflow.start_run() as run:
     "model",
     flavor=mlflow.sklearn,
     training_set=training_set,
-    registered_model_name="dais-2021-churn",
-    input_example=split_X[:100],
-    signature=infer_signature(split_X, split_y))
+    registered_model_name="telco-churn",
+    input_example=split_X[:100])
+    #signature=infer_signature(split_X, split_y))
   
   best_run = run.info
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC The process above created a new version of the registered model `dais-2021-churn`. Transition it to Staging.
+# MAGIC The process above created a new version of the registered model `telco-churn`. Transition it to Staging.
 
 # COMMAND ----------
 
@@ -160,10 +173,19 @@ import mlflow.tracking
 
 client = mlflow.tracking.MlflowClient()
 
-model_version = client.get_latest_versions("dais-2021-churn", stages=["None"])[0]
-client.transition_model_version_stage("dais-2021-churn", model_version.version, stage="Staging")
+model_version = client.get_latest_versions("telco-churn", stages=["None"])[0]
+client.transition_model_version_stage("telco-churn", model_version.version, stage="Staging")
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC A webhook was previously set up to trigger an automated testing notebook whenever a new Staging candidate is registered. If successful, the model is promoted to Production.
+
+# COMMAND ----------
+
+display(training_set.load_df())
+
+
+# COMMAND ----------
+
+
