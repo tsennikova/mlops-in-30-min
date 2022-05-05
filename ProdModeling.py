@@ -13,6 +13,7 @@
 # COMMAND ----------
 
 from databricks.feature_store import FeatureStoreClient, FeatureLookup
+import numpy as np
 
 fs = FeatureStoreClient()
 
